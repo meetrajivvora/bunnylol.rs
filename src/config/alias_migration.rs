@@ -212,6 +212,7 @@ fn migrate_aliases_to_user_bindings_toml(
                     command: command.clone(),
                     description: None,
                     override_builtin: false,
+                    aliases: Vec::new(),
                 },
             )
         })

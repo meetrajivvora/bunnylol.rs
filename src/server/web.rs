@@ -521,6 +521,7 @@ mod tests {
                 url: url.to_string(),
                 description: None,
                 override_builtin: false,
+                aliases: Vec::new(),
             },
         );
         config

@@ -52,6 +52,8 @@ pub enum UserBinding {
         description: Option<String>,
         #[serde(default, rename = "override")]
         override_builtin: bool,
+        #[serde(default)]
+        aliases: Vec<String>,
     },
     /// Rewrites a name to another bunnylol command (dispatched once, no recursion
     /// into other user bindings).
@@ -61,6 +63,8 @@ pub enum UserBinding {
         description: Option<String>,
         #[serde(default, rename = "override")]
         override_builtin: bool,
+        #[serde(default)]
+        aliases: Vec<String>,
     },
 }
 
@@ -103,6 +107,12 @@ impl UserBinding {
             UserBinding::Command { command, .. } => command,
         }
     }
+    /// List of alternative shortcut names for this binding.
+    pub fn aliases(&self) -> &[String] {
+        match self {
+            UserBinding::Url { aliases, .. } | UserBinding::Command { aliases, .. } => aliases,
+        }
+    }
 }
 
 impl BunnylolConfig {
@@ -120,7 +130,13 @@ impl BunnylolConfig {
         name: &str,
         full_args: &str,
     ) -> Option<(ResolvedBinding, bool)> {
-        let binding = self.user_bindings.get(name)?;
+        let binding = self.user_bindings.get(name).or_else(|| {
+            self.user_bindings.values().find(|b| match b {
+                UserBinding::Url { aliases, .. } | UserBinding::Command { aliases, .. } => {
+                    aliases.iter().any(|a| a == name)
+                }
+            })
+        })?;
         let resolved = match binding {
             UserBinding::Url { url, .. } => {
                 ResolvedBinding::Url(apply_url_template(url, name, full_args))
@@ -179,6 +195,7 @@ pub(super) fn format_user_binding_toml(name: &str, binding: &UserBinding) -> Str
             url,
             description,
             override_builtin,
+            aliases,
         } => {
             parts.push(format!("url = \"{}\"", escape_toml_string(url)));
             if let Some(d) = description {
@@ -187,11 +204,19 @@ pub(super) fn format_user_binding_toml(name: &str, binding: &UserBinding) -> Str
             if *override_builtin {
                 parts.push("override = true".to_string());
             }
+            if !aliases.is_empty() {
+                let formatted_aliases: Vec<String> = aliases
+                    .iter()
+                    .map(|a| format!("\"{}\"", escape_toml_string(a)))
+                    .collect();
+                parts.push(format!("aliases = [{}]", formatted_aliases.join(", ")));
+            }
         }
         UserBinding::Command {
             command,
             description,
             override_builtin,
+            aliases,
         } => {
             parts.push(format!("command = \"{}\"", escape_toml_string(command)));
             if let Some(d) = description {
@@ -199,6 +224,13 @@ pub(super) fn format_user_binding_toml(name: &str, binding: &UserBinding) -> Str
             }
             if *override_builtin {
                 parts.push("override = true".to_string());
+            }
+            if !aliases.is_empty() {
+                let formatted_aliases: Vec<String> = aliases
+                    .iter()
+                    .map(|a| format!("\"{}\"", escape_toml_string(a)))
+                    .collect();
+                parts.push(format!("aliases = [{}]", formatted_aliases.join(", ")));
             }
         }
     }
@@ -265,6 +297,7 @@ mod tests {
             url: url.to_string(),
             description: None,
             override_builtin,
+            aliases: Vec::new(),
         }
     }
 
@@ -273,6 +306,7 @@ mod tests {
             command: command.to_string(),
             description: None,
             override_builtin: false,
+            aliases: Vec::new(),
         }
     }
 
@@ -313,6 +347,28 @@ mod tests {
         let gh = config.user_bindings.get("gh").unwrap();
         assert!(matches!(gh, UserBinding::Url { .. }));
         assert!(gh.overrides_builtin());
+    }
+
+    #[test]
+    fn test_parse_user_bindings_with_aliases() {
+        let toml_str = r#"
+            [user_bindings]
+            netbenefits = { url = "https://fidelity.com/netbenefits", aliases = ["401k", "fidelity"] }
+        "#;
+        let config: BunnylolConfig = toml::from_str(toml_str).unwrap();
+        let nb = config.user_bindings.get("netbenefits").unwrap();
+        assert_eq!(nb.aliases(), &["401k", "fidelity"]);
+
+        // Primary name resolves
+        let (resolved, _) = config.resolve_user_binding("netbenefits", "netbenefits").unwrap();
+        assert_eq!(resolved, ResolvedBinding::Url("https://fidelity.com/netbenefits".to_string()));
+
+        // Aliases resolve to the same URL
+        let (resolved_alias, _) = config.resolve_user_binding("401k", "401k").unwrap();
+        assert_eq!(resolved_alias, ResolvedBinding::Url("https://fidelity.com/netbenefits".to_string()));
+
+        let (resolved_alias2, _) = config.resolve_user_binding("fidelity", "fidelity").unwrap();
+        assert_eq!(resolved_alias2, ResolvedBinding::Url("https://fidelity.com/netbenefits".to_string()));
     }
 
     #[test]
@@ -409,6 +465,7 @@ mod tests {
                     url: format!("https://example.com/{}", name),
                     description: None,
                     override_builtin: false,
+                    aliases: Vec::new(),
                 },
             );
         }
@@ -452,6 +509,7 @@ mod tests {
                 url: "https://calendar.google.com/calendar/u/1/r".to_string(),
                 description: None,
                 override_builtin: false,
+                aliases: Vec::new(),
             },
         );
         config.user_bindings.insert(
@@ -460,6 +518,7 @@ mod tests {
                 url: "https://corp.atlassian.net/browse/{}".to_string(),
                 description: Some("Jira".to_string()),
                 override_builtin: false,
+                aliases: Vec::new(),
             },
         );
         config.user_bindings.insert(
@@ -468,6 +527,7 @@ mod tests {
                 command: "gh mycompany/repo".to_string(),
                 description: Some("Work repo".to_string()),
                 override_builtin: false,
+                aliases: Vec::new(),
             },
         );
 

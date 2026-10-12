@@ -192,6 +192,7 @@ fn fold_aliases_into_user_bindings(config: &mut BunnylolConfig) {
                 command: command.clone(),
                 description: None,
                 override_builtin: false,
+                aliases: Vec::new(),
             },
         );
     }
@@ -496,6 +497,7 @@ impl BunnylolConfig {
                     command: command.clone(),
                     description: None,
                     override_builtin: false,
+                    aliases: Vec::new(),
                 });
         }
         let user_bindings_content = if serialized_user_bindings.is_empty() {
@@ -623,6 +625,7 @@ mod tests {
                 command,
                 description,
                 override_builtin,
+                ..
             }) => {
                 assert_eq!(command, "gh mycompany");
                 assert_eq!(description, &None);
@@ -644,6 +647,7 @@ mod tests {
                 command: "gh from-user-bindings".to_string(),
                 description: None,
                 override_builtin: false,
+                aliases: Vec::new(),
             },
         );
         fold_aliases_into_user_bindings(&mut config);

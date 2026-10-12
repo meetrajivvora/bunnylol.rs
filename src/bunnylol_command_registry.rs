@@ -317,6 +317,7 @@ mod cache_tests {
                 url: "https://example.com".to_string(),
                 description: None,
                 override_builtin: false,
+                aliases: Vec::new(),
             },
         );
         // Intentional override — should NOT be reported
@@ -326,6 +327,7 @@ mod cache_tests {
                 url: "https://example.com".to_string(),
                 description: None,
                 override_builtin: true,
+                aliases: Vec::new(),
             },
         );
         // No collision — irrelevant
@@ -335,6 +337,7 @@ mod cache_tests {
                 url: "https://example.com".to_string(),
                 description: None,
                 override_builtin: false,
+                aliases: Vec::new(),
             },
         );
         let conflicts = BunnylolCommandRegistry::validate_user_bindings(&cfg);
